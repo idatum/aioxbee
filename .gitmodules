@@ -1,0 +1,3 @@
+[submodule "python-xbee"]
+	path = pythonxbee
+	url = git@github.com:idatum/python-xbee.git
