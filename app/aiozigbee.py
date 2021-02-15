@@ -59,7 +59,7 @@ class ZigbeeAsyncSerialBase(asyncio.Protocol):
     async def send_remote_command(self, cmd, **kwargs):
         data = self.zigbee._build_command(cmd, **kwargs)
         frame = xbee.frame.APIFrame(data, False).output()
-        self.write(frame)
+        self.write_frame(frame)
         Log.debug('sent {}'.format(frame))
 
     """ Handle a remote_at command. """
