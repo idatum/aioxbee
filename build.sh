@@ -1,3 +1,3 @@
 #!/bin/sh
 
-docker build -t aioxbee_base .
+docker build -t aioxbeebase .

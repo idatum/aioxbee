@@ -15,16 +15,17 @@ class ZigbeeAsyncSerialBase(asyncio.Protocol):
         self.seen_addreses = set()
         self.address_data = {}
 
-    """ Override this method """
+    """ Override this method to process rx_data frames. """
     async def handle_rx_data(self, address, rx_data):
         Log.debug(f"rx_data: {rx_data}")
         Log.warning(f"No override for handle_rx_data: address = 0x{self.hex_address(address)}")
 
-    """ Override this method """
+    """ Override this method to process rx_io_data_long_addr I/O sampling frames. """
     async def handle_samples(self, address, samples):
         Log.debug(f"IO sampling: {samples}")
         Log.warning(f"No override for handle_samples: address = 0x{self.hex_address(address)}")
 
+    # Process the next full frame.
     async def process_frame(self, next_frame):
         if "id" not in next_frame or ("source_addr_long" not in next_frame and "dest_addr" not in next_frame):
             Log.warning("unknown frame: {}".format(next_frame))
@@ -54,12 +55,14 @@ class ZigbeeAsyncSerialBase(asyncio.Protocol):
         else:
             Log.warning("unknown frame: {}".format(next_frame))
 
+    """ Send a remote command (e.g. remote_at). """
     async def send_remote_command(self, cmd, **kwargs):
         data = self.zigbee._build_command(cmd, **kwargs)
         frame = xbee.frame.APIFrame(data, False).output()
-        self.transport.write(frame)
+        self.write(frame)
         Log.debug('sent {}'.format(frame))
 
+    """ Handle a remote_at command. """
     async def handle_remote_at(self, src_address, rf_data):
         # expecting 17 bytes between length field (2 bytes) and checksum:
         length = (rf_data[1] >> 8) + rf_data[2]
@@ -84,27 +87,44 @@ class ZigbeeAsyncSerialBase(asyncio.Protocol):
                             command=pin,
                             parameter=arg)
 
+    """ Send a remote_at to change the state of a DIO pin.
+    dest: destination long address.
+    pin: e.g. D0
+    param: (see example)
+    Example: Code to turn on D0 configured as Digital Out:
+        PIN_ON = "%c%c" % (0, 5)
+        await self.send_remote_pin(struct.pack(">Q", 0x13A0123456789A), 'D0', PIN_ON)
+    """
     async def send_remote_pin(self, dest, pin, param):
         await self.send_remote_command(cmd='remote_at',
                             dest_addr_long=dest,
                             command=pin,
                             parameter=param)
 
+    """ Send data via tx to an address.
+    Example: Send the string 'Hello, World!' to a destination address:
+        await self.send_transmit_request(struct.pack(">Q", 0x13A0123456789A), "Hello, World!")
+    """
     async def send_transmit_request(self, dest, data):
         await self.send_remote_command(cmd='tx',
                             dest_addr_long=dest,
                             data=data)
 
+    """ Convert long address to string as hex.
+    address: packed long address e.g. struct.pack(">Q", 0x13A0123456789A)
+    """
     def hex_address(self, address):
         """ Unpack as hex string """
         if len(address) == 0:
             return None
         return '%x' % (struct.unpack(">Q", address)[0])
 
+    # Next frame.
     def split_frame(self, frame):
         next_frame = self.zigbee._split_response(frame.data)
         return next_frame
 
+    # Process serial data.
     def on_data_received(self, data):
         for d in data:
             byte = struct.pack('B', d)
@@ -127,6 +147,7 @@ class ZigbeeAsyncSerialBase(asyncio.Protocol):
                 Log.exception(e)
                 self.frame = xbee.frame.APIFrame(escaped=True)
 
+    # Write a frame.
     def write_frame(self, frame):
         self.transport.write(frame)
 
