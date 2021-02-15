@@ -3,9 +3,7 @@ import logging.handlers
 import struct
 import asyncio
 import serial_asyncio
-import pythonxbee.xbee as xbee
-import pythonxbee.xbee.frame
-import argparse
+import xbee
 
 # Logging
 Log = logging.getLogger("aioxbee")
@@ -19,13 +17,13 @@ class ZigbeeAsyncSerialBase(asyncio.Protocol):
 
     """ Override this method """
     async def handle_rx_data(self, address, rx_data):
-        Log.debug(rx_data)
-        Log.warning("No override for handle_rx_data")
+        Log.debug(f"rx_data: {rx_data}")
+        Log.warning(f"No override for handle_rx_data: address = 0x{self.hex_address(address)}")
 
     """ Override this method """
     async def handle_samples(self, address, samples):
-        Log.debug(samples)
-        Log.warning("No override for handle_samples")
+        Log.debug(f"IO sampling: {samples}")
+        Log.warning(f"No override for handle_samples: address = 0x{self.hex_address(address)}")
 
     async def process_frame(self, next_frame):
         if "id" not in next_frame or ("source_addr_long" not in next_frame and "dest_addr" not in next_frame):
@@ -36,7 +34,7 @@ class ZigbeeAsyncSerialBase(asyncio.Protocol):
             source_address = next_frame["source_addr_long"]
             if source_address not in self.seen_addreses:
                 self.seen_addreses.add(source_address)
-                Log.info("seen address: {}".format(self.hex_address(source_address)))
+                Log.info("seen address: 0x{}".format(self.hex_address(source_address)))
             if frame_id == "rx":
                 rf_data = next_frame["rf_data"]
                 # Process frame type 0x17 as remote_at command.
@@ -169,6 +167,7 @@ if __name__ == '__main__':
                         datefmt='%m-%d-%Y %H:%M:%S')
 
     loop = asyncio.get_event_loop()
+    # Include asyncio debug tracing
     loop.set_debug(True)
 
     coro = serial_asyncio.create_serial_connection(loop, ZigbeeAsyncSerialBase, "/dev/ttyUSB0", baudrate=115200)
