@@ -6,22 +6,32 @@ import serial_asyncio
 import xbee
 
 # Logging
-Log = logging.getLogger("aioxbee")
+Log = logging.getLogger("aiozigbee")
 
 class ZigbeeAsyncSerialBase(asyncio.Protocol):
+    """
+        Implement asyncio.Protocol to act as XBee ZigBee coordinator.
+        Override to hande rx_data, DIO samples, and to send remote commands.
+    """
 
     def __init__(self):
         super().__init__()
+        # Keep track of addresses.
         self.seen_addreses = set()
-        self.address_data = {}
 
-    """ Override this method to process rx_data frames. """
     async def handle_rx_data(self, address, rx_data):
+        """ Override this method to process rx_data frames.
+            address: the source address.
+            rx_data: frame data.
+        """
         Log.debug(f"rx_data: {rx_data}")
         Log.warning(f"No override for handle_rx_data: address = 0x{self.hex_address(address)}")
 
-    """ Override this method to process rx_io_data_long_addr I/O sampling frames. """
     async def handle_samples(self, address, samples):
+        """ Override this method to process rx_io_data_long_addr I/O sampling frames.
+            address: the source address.
+            samples: array of DIO samples.
+        """
         Log.debug(f"IO sampling: {samples}")
         Log.warning(f"No override for handle_samples: address = 0x{self.hex_address(address)}")
 
@@ -55,15 +65,15 @@ class ZigbeeAsyncSerialBase(asyncio.Protocol):
         else:
             Log.warning("unknown frame: {}".format(next_frame))
 
-    """ Send a remote command (e.g. remote_at). """
     async def send_remote_command(self, cmd, **kwargs):
+        """ Send a remote command (e.g. remote_at). """
         data = self.zigbee._build_command(cmd, **kwargs)
         frame = xbee.frame.APIFrame(data, False).output()
         self.write_frame(frame)
         Log.debug('sent {}'.format(frame))
 
-    """ Handle a remote_at command. """
     async def handle_remote_at(self, src_address, rf_data):
+        """ Handle a remote_at command. """
         # expecting 17 bytes between length field (2 bytes) and checksum:
         length = (rf_data[1] >> 8) + rf_data[2]
         if length < 0x11:
@@ -87,34 +97,34 @@ class ZigbeeAsyncSerialBase(asyncio.Protocol):
                             command=pin,
                             parameter=arg)
 
-    """ Send a remote_at to change the state of a DIO pin.
-    dest: destination long address.
-    pin: e.g. D0
-    param: (see example)
-    Example: Code to turn on D0 configured as Digital Out:
-        PIN_ON = "%c%c" % (0, 5)
-        await self.send_remote_pin(struct.pack(">Q", 0x13A0123456789A), 'D0', PIN_ON)
-    """
     async def send_remote_pin(self, dest, pin, param):
+        """ Send a remote_at to change the state of a DIO pin.
+            dest: destination long address.
+            pin: e.g. D0
+            param: (see example)
+            Example: Code to turn on D0 configured as Digital Out:
+                PIN_ON = "%c%c" % (0, 5)
+                await self.send_remote_pin(struct.pack(">Q", 0x13A0123456789A), 'D0', PIN_ON)
+        """
         await self.send_remote_command(cmd='remote_at',
                             dest_addr_long=dest,
                             command=pin,
                             parameter=param)
 
-    """ Send data via tx to an address.
-    Example: Send the string 'Hello, World!' to a destination address:
-        await self.send_transmit_request(struct.pack(">Q", 0x13A0123456789A), "Hello, World!")
-    """
     async def send_transmit_request(self, dest, data):
+        """ Send data via tx to an address.
+            Example: Send the string 'Hello, World!' to a destination address:
+            await self.send_transmit_request(struct.pack(">Q", 0x13A0123456789A), "Hello, World!")
+        """
         await self.send_remote_command(cmd='tx',
                             dest_addr_long=dest,
                             data=data)
 
-    """ Convert long address to string as hex.
-    address: packed long address e.g. struct.pack(">Q", 0x13A0123456789A)
-    """
+    # Unpack as hex string
     def hex_address(self, address):
-        """ Unpack as hex string """
+        """ Convert long address to string formatted in hex.
+            address: packed long address e.g. struct.pack(">Q", 0x13A0123456789A)
+        """
         if len(address) == 0:
             return None
         return '%x' % (struct.unpack(">Q", address)[0])
@@ -152,7 +162,7 @@ class ZigbeeAsyncSerialBase(asyncio.Protocol):
         self.transport.write(frame)
 
     # asyncio.Protocol
-    """ Setup """
+    # Setup
     def connection_made(self, transport):
         self.transport = transport
         self.frame = xbee.frame.APIFrame(escaped=True)
