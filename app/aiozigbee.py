@@ -38,14 +38,14 @@ class ZigbeeAsyncSerialBase(asyncio.Protocol):
     # Process the next full frame.
     async def process_frame(self, next_frame):
         if "id" not in next_frame or ("source_addr_long" not in next_frame and "dest_addr" not in next_frame):
-            Log.warning("unknown frame: {}".format(next_frame))
+            Log.warning(f"unknown frame: {next_frame}")
             return
         frame_id = next_frame["id"]
         if "source_addr_long" in next_frame:
             source_address = next_frame["source_addr_long"]
             if source_address not in self.seen_addreses:
                 self.seen_addreses.add(source_address)
-                Log.info("seen address: 0x{}".format(self.hex_address(source_address)))
+                Log.info(f"seen address: 0x{self.hex_address(source_address)}")
             if frame_id == "rx":
                 rf_data = next_frame["rf_data"]
                 # Process frame type 0x17 as remote_at command.
@@ -61,37 +61,35 @@ class ZigbeeAsyncSerialBase(asyncio.Protocol):
             dest_addr = next_frame["dest_addr"]
             # short address
             addr = struct.unpack(">H", dest_addr)[0]
-            Log.info("Handled tx_status for 0x%x deliver status : %s" % (addr, next_frame["deliver_status"]))
+            Log.info(f"Handled tx_status for 0x{addr:x} deliver status : {next_frame['deliver_status']}")
         else:
-            Log.warning("unknown frame: {}".format(next_frame))
+            Log.warning(f"unknown frame: {next_frame}")
 
     async def send_remote_command(self, cmd, **kwargs):
         """ Send a remote command (e.g. remote_at). """
         data = self.zigbee._build_command(cmd, **kwargs)
         frame = xbee.frame.APIFrame(data, False).output()
         self.write_frame(frame)
-        Log.debug('sent {}'.format(frame))
+        Log.debug(f'sent {frame}')
 
     async def handle_remote_at(self, src_address, rf_data):
         """ Handle a remote_at command. """
         # expecting 17 bytes between length field (2 bytes) and checksum:
         length = (rf_data[1] >> 8) + rf_data[2]
         if length < 0x11:
-            Log.error('remote_at length ({}) is unexpected: {}'.format(length, rf_data))
+            Log.error(f'remote_at length ({length}) is unexpected: {rf_data}')
             return
         opt = rf_data[15]
         if opt != 2:
-            Log.error("remote_at option ({}) is unexpected: {}".format(opt, rf_data))
+            Log.error(f"remote_at option ({opt}) is unexpected: {rf_data}")
             return
         pin = rf_data[16:18].decode('utf-8')
         if pin[0].upper() != 'D':
-            Log.error("remote_at command ({}) is unexpected: {}".format(pin, rf_data))
+            Log.error(f"remote_at command ({pin}) is unexpected: {rf_data}")
             return
         dest_address = rf_data[5:13]
         arg = rf_data[18:20]
-        Log.info("{} remote_at {}, {}, {}, {}".format(self.hex_address(src_address),
-                                                   self.hex_address(dest_address),
-                                                   opt, pin, arg[1]))
+        Log.info(f"{self.hex_address(src_address)} remote_at {self.hex_address(dest_address)}, {opt}, {pin}, {arg[1]}")
         await self.send_remote_command(cmd='remote_at',
                             dest_addr_long=dest_address,
                             command=pin,
@@ -127,7 +125,7 @@ class ZigbeeAsyncSerialBase(asyncio.Protocol):
         """
         if len(address) == 0:
             return None
-        return '%x' % (struct.unpack(">Q", address)[0])
+        return f'{struct.unpack(">Q", address)[0]:x}'
 
     # Next frame.
     def split_frame(self, frame):
@@ -142,7 +140,7 @@ class ZigbeeAsyncSerialBase(asyncio.Protocol):
                 if byte == xbee.frame.APIFrame.START_BYTE:
                     Log.debug('Start byte read')
                     if len(self.frame.raw_data) > 0:
-                        Log.warning('Partial frame read; resetting. {}'.format(self.frame.raw_data))
+                        Log.warning(f'Partial frame read; resetting. {self.frame.raw_data}')
                         self.frame = xbee.frame.APIFrame(escaped=True)
 
                 self.frame.fill(byte)
@@ -167,12 +165,12 @@ class ZigbeeAsyncSerialBase(asyncio.Protocol):
         self.transport = transport
         self.frame = xbee.frame.APIFrame(escaped=True)
         self.zigbee = xbee.ZigBee(ser=None)
-        Log.info('port opened {}'.format(transport))
+        Log.info(f'port opened {transport}')
         transport.serial.rts = False  # You can manipulate Serial object via transport
 
     # asyncio.Protocol
     def data_received(self, data):
-        Log.debug('data received {}'.format(repr(data)))
+        Log.debug(f'data received {repr(data)}')
         self.on_data_received(data)
 
     # asyncio.Protocol
